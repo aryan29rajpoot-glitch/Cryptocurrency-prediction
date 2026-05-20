@@ -138,7 +138,7 @@ elif selected == "Prediction":
     scaled_data = scaler.fit_transform(data)
 
     # LOAD MODEL
-    model = load_model("btc_lstm_model.h5")
+    model = load_model("btc_lstm_model.h5", compile=False)
 
     # TEST DATA
     test_data = scaled_data[-100:]
