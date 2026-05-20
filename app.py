@@ -2,8 +2,6 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from tensorflow.keras.models import load_model
-from sklearn.preprocessing import MinMaxScaler
 import plotly.graph_objects as go
 from ta.trend import SMAIndicator
 from ta.momentum import RSIIndicator
@@ -19,15 +17,11 @@ st.set_page_config(
 # LOGIN AUTHENTICATION
 # -----------------------------
 
-# DEFAULT USERNAME & PASSWORD
 USERNAME = "admin"
 PASSWORD = "1234"
 
-# SESSION STATE
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
-
-# LOGIN FUNCTION
 
 def login():
 
@@ -46,7 +40,7 @@ def login():
         else:
             st.error("Invalid Username or Password")
 
-# SHOW LOGIN PAGE IF NOT LOGGED IN
+# STOP APP IF NOT LOGGED IN
 if not st.session_state.logged_in:
     login()
     st.stop()
@@ -75,23 +69,32 @@ with st.sidebar:
         st.session_state.logged_in = False
         st.rerun()
 
+# -----------------------------
 # TITLE
+# -----------------------------
+
 st.title("Cryptocurrency Forecasting Dashboard")
 
+# -----------------------------
 # CRYPTO SELECTION
+# -----------------------------
+
 crypto = st.selectbox(
     "Select Cryptocurrency",
     ["BTC-USD", "ETH-USD", "SOL-USD", "DOGE-USD"]
 )
 
+# -----------------------------
 # DOWNLOAD DATA
+# -----------------------------
+
 df = yf.download(
     crypto,
     start="2020-01-01",
     auto_adjust=True
 )
 
-# FIX MULTI-INDEX COLUMNS
+# FIX MULTIINDEX
 if isinstance(df.columns, pd.MultiIndex):
     df.columns = df.columns.get_level_values(0)
 
@@ -129,52 +132,34 @@ if selected == "Home":
 
 elif selected == "Prediction":
 
-    st.subheader("LSTM Price Prediction")
+    st.subheader("Crypto Price Prediction")
 
-    data = df[['Close']]
+    # LAST 30 DAYS DATA
+    recent_data = df['Close'].tail(30)
 
-    # SCALE DATA
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    scaled_data = scaler.fit_transform(data)
+    # SIMPLE MOVING AVERAGE PREDICTION
+    predicted_price = recent_data.mean()
 
-    # LOAD MODEL
-    model = load_model("btc_lstm_model.h5", compile=False)
+    # ACTUAL PRICES
+    actual_prices = recent_data.values
 
-    # TEST DATA
-    test_data = scaled_data[-100:]
-
-    x_test = []
-
-    for i in range(60, len(test_data)):
-        x_test.append(test_data[i-60:i, 0])
-
-    x_test = np.array(x_test)
-
-    # RESHAPE FOR LSTM
-    x_test = np.reshape(
-        x_test,
-        (x_test.shape[0], x_test.shape[1], 1)
+    # PREDICTED LINE
+    predicted_prices = np.full(
+        shape=len(actual_prices),
+        fill_value=predicted_price
     )
-
-    # PREDICTIONS
-    predictions = model.predict(x_test)
-
-    # INVERSE SCALE
-    predictions = scaler.inverse_transform(predictions)
-
-    actual_prices = data[-40:].values
 
     # GRAPH
     fig2 = go.Figure()
 
     fig2.add_trace(go.Scatter(
-        y=actual_prices.flatten(),
+        y=actual_prices,
         mode='lines',
         name='Actual Price'
     ))
 
     fig2.add_trace(go.Scatter(
-        y=predictions.flatten(),
+        y=predicted_prices,
         mode='lines',
         name='Predicted Price'
     ))
@@ -191,24 +176,15 @@ elif selected == "Prediction":
     # NEXT DAY PREDICTION
     st.subheader("Next Day Prediction")
 
-    last_60_days = scaled_data[-60:]
+    latest_price = df['Close'].iloc[-1]
 
-    X_future = []
-    X_future.append(last_60_days)
+    # SIMPLE TREND CALCULATION
+    trend = recent_data.pct_change().mean()
 
-    X_future = np.array(X_future)
-
-    X_future = np.reshape(
-        X_future,
-        (X_future.shape[0], X_future.shape[1], 1)
-    )
-
-    future_price = model.predict(X_future)
-
-    future_price = scaler.inverse_transform(future_price)
+    next_day_prediction = latest_price * (1 + trend)
 
     st.success(
-        f"Predicted Next Day Price: ${future_price[0][0]:,.2f}"
+        f"Predicted Next Day Price: ${next_day_prediction:.2f}"
     )
 
 # -----------------------------
